@@ -10,6 +10,7 @@
 
 extern crate libc;
 extern crate rustc_serialize;
+extern crate eventual;
 
 pub use common::HyperError;
 pub use client::{Client};

@@ -1,7 +1,7 @@
 use std::mem::transmute;
 use std::net::SocketAddr;
-use std::sync::Future;
-use std::thunk::Thunk;
+use eventual::Future;
+use std::boxed::{FnBox as Thunk};
 use std::sync::mpsc::{channel, Sender, Receiver};
 use std::thread;
 use std::ptr::{Unique, null, null_mut};
@@ -131,7 +131,7 @@ impl Admin {
         self.async_add_space(desc).into_inner()
     }
 
-    pub fn async_add_space(&self, desc: &str) -> Future<Result<(), HyperError>> {
+    pub fn async_add_space(&self, desc: &str) -> Future<(), HyperError> {
         self.async_add_or_remove_space(desc, "add")
     }
 
@@ -139,11 +139,11 @@ impl Admin {
         self.async_remove_space(desc).into_inner()
     }
 
-    pub fn async_remove_space(&self, desc: &str) -> Future<Result<(), HyperError>> {
+    pub fn async_remove_space(&self, desc: &str) -> Future<(), HyperError> {
         self.async_add_or_remove_space(desc, "remove")
     }
 
-    fn async_add_or_remove_space(&self, desc: &str, func: &str) -> Future<Result<(), HyperError>> {
+    fn async_add_or_remove_space(&self, desc: &str, func: &str) -> Future<(), HyperError> {
         unsafe {
             let desc_str = desc.to_c_str();
             let mut status_ptr = transmute(box 0u32);
@@ -191,7 +191,7 @@ impl Admin {
         self.async_dump_config().into_inner()
     }
 
-    pub fn async_dump_config(&self) -> Future<Result<String, HyperError>> {
+    pub fn async_dump_config(&self) -> Future<String, HyperError> {
         self.async_dump_config_or_list_spaces("dump_config")
     }
 
@@ -199,11 +199,11 @@ impl Admin {
         self.async_list_spaces().into_inner()
     }
 
-    pub fn async_list_spaces(&self) -> Future<Result<String, HyperError>> {
+    pub fn async_list_spaces(&self) -> Future<String, HyperError> {
         self.async_dump_config_or_list_spaces("list_spaces")
     }
 
-    fn async_dump_config_or_list_spaces(&self, func: &str) -> Future<Result<String, HyperError>> {
+    fn async_dump_config_or_list_spaces(&self, func: &str) -> Future<String, HyperError> {
         unsafe {
             let mut status = box 0u32;
             let res = Unique::new(null::<i8>() as *mut i8);
@@ -448,4 +448,3 @@ impl Admin {
         // }
     // }
 // }
-

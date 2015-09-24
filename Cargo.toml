@@ -32,3 +32,6 @@ libc = "*"
 num_cpus = "*"
 errno = "0.1.2"
 rustc-serialize = "0.3.16"
+
+[dependencies.eventual]
+git = "https://github.com/carllerche/eventual"

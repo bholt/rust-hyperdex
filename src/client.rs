@@ -2,6 +2,7 @@
 
 extern crate errno;
 extern crate num_cpus;
+extern crate eventual;
 
 use std::net::SocketAddr;
 use std::sync::mpsc::TryRecvError;
@@ -13,7 +14,6 @@ use std::hash::Hash;
 use std::sync::atomic;
 use std::sync::atomic::Ordering;
 use std::sync::atomic::AtomicUsize;
-use std::sync::Future;
 use std::sync::{Arc, Mutex};
 use std::sync::mpsc::{channel, Sender, Receiver};
 use std::thread;
@@ -21,6 +21,9 @@ use std::thread;
 use libc::*;
 
 use rustc_serialize::json::Json;
+
+use eventual::Future;
+use eventual::AsyncError::Failed;
 
 use common::*;
 use hyperdex::*;
@@ -39,7 +42,7 @@ unsafe fn build_hyperobject(c_attrs: *const Struct_hyperdex_client_attribute, c_
         match attr.datatype {
             HYPERDATATYPE_STRING => {
                 attrs.insert(name,
-                             Vec::from_raw_buf(attr.value as *const u8, attr.value_sz as usize));
+                             Vec::from_raw_parts(attr.value as *mut u8, attr.value_sz as usize, 1 as usize));
             },
             HYPERDATATYPE_INT64 => {
                 let mut cint = 0i64;
@@ -973,7 +976,7 @@ macro_rules! make_fn_spacename_key_status_attributes(
     ($fn_name: ident, $async_name: ident) => (
         impl Client {
         pub fn $async_name<S, K>(&mut self, space: S, key: K)
-            -> Future<Result<HyperObject, HyperError>> where S: ToCStr, K: ToHyperValue {
+            -> Future<HyperObject, HyperError> where S: ToCStr, K: ToHyperValue {
             unsafe {
             // TODO: Is "Relaxed" good enough?
             let inner_client =
@@ -1045,7 +1048,7 @@ macro_rules! make_fn_spacename_key_status(
     ($fn_name: ident, $async_name: ident) => (
         impl Client {
         pub fn $async_name<S, K>(&mut self, space: S, key: K)
-            -> Future<Result<(), HyperError>> where S: ToCStr, K: ToHyperValue {
+            -> Future<(), HyperError> where S: ToCStr, K: ToHyperValue {
             unsafe {
             let inner_client =
                 self.inner_clients[self.counter.fetch_add(1, Ordering::Relaxed) as usize % self.inner_clients.len()].clone();
@@ -1067,20 +1070,20 @@ macro_rules! make_fn_spacename_key_status(
                                                                key_str, key_sz,
                                                                &mut *status);
                 if req_id < 0 {
-                    return Future::from_value(Err(get_client_error(*inner_client.ptr, 0)));
+                    return Future::error(get_client_error(*inner_client.ptr, 0));
                 }
                 ops.insert(req_id, HyperStateOp(err_tx));
             }
             hyperdex_ds_arena_destroy(arena);
 
-            Future::from_fn(move|| {
+            Future::spawn(move|| {
                 let err = err_rx.recv().unwrap();
                 if err.status != HYPERDEX_CLIENT_SUCCESS {
-                    Err(err)
+                    Failed(err)
                 } else if *status != HYPERDEX_CLIENT_SUCCESS {
-                    Err(get_client_error(*inner_client.ptr, *status))
+                    Failed(get_client_error(*inner_client.ptr, *status))
                 } else {
-                    Ok(())
+                    ()
                 }
             })
             }
@@ -1098,7 +1101,7 @@ macro_rules! make_fn_spacename_key_attributenames_status_attributes(
     ($fn_name: ident, $async_name: ident) => (
         impl Client {
         pub fn $async_name<S, K, A>(&mut self, space: S, key: K, attrs: Vec<A>)
-            -> Future<Result<HyperObject, HyperError>> where S: ToCStr, K: ToHyperValue, A: ToString {
+            -> Future<HyperObject, HyperError> where S: ToCStr, K: ToHyperValue, A: ToString {
             unsafe {
             // TODO: Is "Relaxed" good enough?
             let inner_client =
@@ -1183,7 +1186,7 @@ macro_rules! make_fn_spacename_key_attributes_status(
     ($fn_name: ident, $async_name: ident) => (
         impl Client {
         pub fn $async_name<S, K>(&mut self, space: S, key: K, value: HyperObject)
-            -> Future<Result<(), HyperError>> where S: ToCStr, K: ToHyperValue { unsafe {
+            -> Future<(), HyperError> where S: ToCStr, K: ToHyperValue { unsafe {
             let inner_client =
                 self.inner_clients[self.counter.fetch_add(1, Ordering::Relaxed) as usize % self.inner_clients.len()].clone();
 
@@ -1242,7 +1245,7 @@ macro_rules! make_fn_spacename_key_mapattributes_status(
     ($fn_name: ident, $async_name: ident) => (
         impl Client {
             pub fn $async_name<S, K>(&mut self, space: S, key: K, mapattrs: Vec<HyperMapAttribute>)
-                -> Future<Result<(), HyperError>> where S: ToCStr, K: ToHyperValue { unsafe {
+                -> Future<(), HyperError> where S: ToCStr, K: ToHyperValue { unsafe {
                 let inner_client =
                     self.inner_clients[self.counter.fetch_add(1, Ordering::Relaxed) as usize % self.inner_clients.len()].clone();
 
@@ -1300,7 +1303,7 @@ macro_rules! make_fn_spacename_key_predicates_attributes_status(
     ($fn_name: ident, $async_name: ident) => (
         impl Client {
             pub fn $async_name<S, K>(&mut self, space: S, key: K, checks: Vec<HyperPredicate>, value: HyperObject)
-                -> Future<Result<(), HyperError>> where S: ToCStr, K: ToHyperValue { unsafe {
+                -> Future<(), HyperError> where S: ToCStr, K: ToHyperValue { unsafe {
                     let inner_client =
                         self.inner_clients[self.counter.fetch_add(1, Ordering::Relaxed) as usize % self.inner_clients.len()].clone();
 
@@ -1375,7 +1378,7 @@ macro_rules! make_fn_spacename_key_predicates_mapattributes_status(
         impl Client {
             pub fn $async_name<S, K>(&mut self, space: S, key: K,
                                      checks: Vec<HyperPredicate>, mapattrs: Vec<HyperMapAttribute>)
-                -> Future<Result<(), HyperError>> where S: ToCStr, K: ToHyperValue { unsafe {
+                -> Future<(), HyperError> where S: ToCStr, K: ToHyperValue { unsafe {
                 let inner_client =
                     self.inner_clients[self.counter.fetch_add(1, Ordering::Relaxed) as usize % self.inner_clients.len()].clone();
 
