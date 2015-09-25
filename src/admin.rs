@@ -12,6 +12,9 @@ use common::*;
 use hyperdex::*;
 use hyperdex_admin::*;
 
+use helpers;
+use helpers::FutureHelpers;
+
 /// A HyperDex Admin object, used for meta operations like creating and removing spaces.
 pub struct Admin {
     ptr: *mut Struct_hyperdex_admin,
@@ -164,7 +167,7 @@ impl Admin {
                 }
             };
             if req_id == -1 {
-                return Future::from_value(Err(get_admin_error(self.ptr, *status_ptr)))
+                return Future::error(get_admin_error(self.ptr, *status_ptr))
             }
 
             let res_tx2 = res_tx.clone();
@@ -181,7 +184,7 @@ impl Admin {
 
             self.req_tx.send(req);
 
-            Future::from_fn(move|| {
+            helpers::spawn(move|| {
                 res_rx.recv().unwrap()
             })
         }
@@ -221,7 +224,7 @@ impl Admin {
                 }
             };
             if req_id == -1 {
-                return Future::from_value(Err(get_admin_error(self.ptr, *status)));
+                return Future::error(get_admin_error(self.ptr, *status));
             }
 
             let res_tx2 = res_tx.clone();
@@ -239,7 +242,7 @@ impl Admin {
 
             self.req_tx.send(req);
 
-            Future::from_fn(move|| {
+            helpers::spawn(move|| {
                 res_rx.recv().unwrap()
             })
         }

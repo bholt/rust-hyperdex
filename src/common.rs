@@ -40,7 +40,7 @@ pub fn get_client_error(client: *mut Struct_hyperdex_client, status: u32) -> Hyp
 }
 
 pub unsafe fn to_bytes_with_len(ptr: *const ::libc::c_char, len: u64) -> Vec<u8> {
-    return Vec::from_raw_buf(ptr as *const u8, len as usize);
+    return Vec::from_raw_parts(ptr as *mut u8, len as usize, 1 as usize);
 }
 
 pub unsafe fn to_string(ptr: *const ::libc::c_char) -> String {

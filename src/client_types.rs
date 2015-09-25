@@ -137,7 +137,7 @@ impl Display for HyperObjectKeyError {
     }
 }
 
-pub trait FromHyperValue {
+pub trait FromHyperValue: Sized {
     fn from_hyper(val: HyperValue) -> Result<Self, HyperObjectKeyError>;
 }
 

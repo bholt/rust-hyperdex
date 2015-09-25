@@ -22,8 +22,7 @@ use libc::*;
 
 use rustc_serialize::json::Json;
 
-use eventual::Future;
-use eventual::AsyncError::Failed;
+use eventual::{Future,Async,AsyncError};
 
 use common::*;
 use hyperdex::*;
@@ -32,6 +31,9 @@ use hyperdex_datastructures::*;
 use client_types::*;
 use client_types::HyperValue::*;
 use client_types::HyperState::*;
+
+use helpers;
+use helpers::FutureHelpers;
 
 unsafe fn build_hyperobject(c_attrs: *const Struct_hyperdex_client_attribute, c_attrs_sz: size_t) -> Result<HyperObject, String> {
     let mut attrs = HyperObject::new();
@@ -1004,13 +1006,13 @@ macro_rules! make_fn_spacename_key_status_attributes(
                                                                &mut *status,
                                                                &mut (*attrs).0, &mut *attrs_sz);
                 if req_id < 0 {
-                    return Future::from_value(Err(get_client_error(*inner_client.ptr, 0)));
+                    return Future::error(get_client_error(*inner_client.ptr, 0));
                 }
                 ops.insert(req_id, HyperStateOp(err_tx));
             }
             hyperdex_ds_arena_destroy(arena);
 
-            Future::from_fn(move|| {
+            helpers::spawn(move || {
                 let err = err_rx.recv().unwrap();
                 if err.status != HYPERDEX_CLIENT_SUCCESS {
                     Err(err)
@@ -1076,14 +1078,14 @@ macro_rules! make_fn_spacename_key_status(
             }
             hyperdex_ds_arena_destroy(arena);
 
-            Future::spawn(move|| {
+            helpers::spawn(move|| {
                 let err = err_rx.recv().unwrap();
                 if err.status != HYPERDEX_CLIENT_SUCCESS {
-                    Failed(err)
+                    Err(err)
                 } else if *status != HYPERDEX_CLIENT_SUCCESS {
-                    Failed(get_client_error(*inner_client.ptr, *status))
+                    Err(get_client_error(*inner_client.ptr, *status))
                 } else {
-                    ()
+                    Ok(())
                 }
             })
             }
@@ -1091,7 +1093,7 @@ macro_rules! make_fn_spacename_key_status(
 
         pub fn $fn_name<S, K>(&mut self, space: S, key: K)
             -> Result<(), HyperError> where S: ToCStr, K: ToHyperValue {
-            self.$async_name(space, key).into_inner()
+              self.$async_name(space, key).into_inner()
         }
         }
     );
@@ -1119,11 +1121,11 @@ macro_rules! make_fn_spacename_key_attributenames_status_attributes(
                                                                attr.to_string()
                                                            }).collect()) {
                 Ok(x) => x,
-                Err(err) => return Future::from_value(Err(HyperError {
+                Err(err) => return Future::error(HyperError {
                     status: 0,
                     message: err,
                     location: String::new(),
-                })),
+                }),
             };
 
             let (err_tx, err_rx) = channel();
@@ -1142,13 +1144,13 @@ macro_rules! make_fn_spacename_key_attributenames_status_attributes(
                                                                &mut *status_ptr,
                                                                &mut (*attrs_ptr).0, &mut *attrs_sz_ptr);
                 if req_id < 0 {
-                    return Future::from_value(Err(get_client_error(*inner_client.ptr, 0)));
+                    return Future::error(get_client_error(*inner_client.ptr, 0));
                 }
                 ops.insert(req_id, HyperStateOp(err_tx));
             }
             hyperdex_ds_arena_destroy(arena);
 
-            Future::from_fn(move|| {
+            helpers::spawn(move|| {
                 let err = err_rx.recv().unwrap();
                 if err.status != HYPERDEX_CLIENT_SUCCESS {
                     Err(err)
@@ -1215,13 +1217,13 @@ macro_rules! make_fn_spacename_key_attributes_status(
                                                                obj.as_ptr(), obj.len() as u64,
                                                                &mut *status_ptr);
                 if req_id < 0 {
-                    return Future::from_value(Err(get_client_error(*inner_client.ptr, 0)));
+                    return Future::error(get_client_error(*inner_client.ptr, 0));
                 }
                 ops.insert(req_id, HyperStateOp(err_tx));
             }
 
             hyperdex_ds_arena_destroy(arena);
-            Future::from_fn(move|| {
+            helpers::spawn(move|| {
                 let err = err_rx.recv().unwrap();
                 if err.status != HYPERDEX_CLIENT_SUCCESS {
                     Err(err)
@@ -1273,13 +1275,13 @@ macro_rules! make_fn_spacename_key_mapattributes_status(
                                                 c_mapattrs.as_ptr(), c_mapattrs.len() as u64,
                                                 &mut *status_ptr);
                     if req_id < 0 {
-                        return Future::from_value(Err(get_client_error(*inner_client.ptr, 0)));
+                        return Future::error(get_client_error(*inner_client.ptr, 0));
                     }
                     ops.insert(req_id, HyperStateOp(err_tx));
                 }
 
                 hyperdex_ds_arena_destroy(arena);
-                Future::from_fn(move|| {
+                helpers::spawn(move|| {
                     let err = err_rx.recv().unwrap();
                     if err.status != HYPERDEX_CLIENT_SUCCESS {
                         Err(err)
@@ -1313,11 +1315,11 @@ macro_rules! make_fn_spacename_key_predicates_attributes_status(
                     let c_checks = match convert_predicates(arena, checks) {
                         Ok(x) => x,
                         Err(err) => {
-                            return Future::from_value(Err(HyperError {
+                            return Future::error(HyperError {
                                 status: 0,
                                 message: err,
                                 location: String::new(),
-                            }));
+                            });
                         },
                     };
 
@@ -1347,12 +1349,12 @@ macro_rules! make_fn_spacename_key_predicates_attributes_status(
                                 obj.len() as u64,
                                 &mut *status_ptr);
                         if req_id < 0 {
-                            return Future::from_value(Err(get_client_error(*inner_client.ptr, 0)));
+                            return Future::error(get_client_error(*inner_client.ptr, 0));
                         }
                         ops.insert(req_id, HyperStateOp(res_tx));
                     }
                     hyperdex_ds_arena_destroy(arena);
-                    Future::from_fn(move|| {
+                    helpers::spawn(move|| {
                         let err = res_rx.recv().unwrap();
                         if err.status != HYPERDEX_CLIENT_SUCCESS {
                             Err(err)
@@ -1391,21 +1393,21 @@ macro_rules! make_fn_spacename_key_predicates_mapattributes_status(
                 let c_checks = match convert_predicates(arena, checks) {
                     Ok(x) => x,
                     Err(err) => {
-                        return Future::from_value(Err(HyperError {
+                        return Future::error(HyperError {
                             status: 0,
                             message: err,
                             location: String::new(),
-                        }));
+                        });
                     },
                 };
                 let c_mapattrs = match convert_map_attributes(arena, mapattrs) {
                     Ok(x) => x,
                     Err(err) => {
-                        return Future::from_value(Err(HyperError {
+                        return Future::error(HyperError {
                             status: 0,
                             message: err,
                             location: String::new(),
-                        }));
+                        });
                     },
                 };
 
@@ -1423,13 +1425,13 @@ macro_rules! make_fn_spacename_key_predicates_mapattributes_status(
                                                 c_mapattrs.as_ptr(), c_mapattrs.len() as u64,
                                                 &mut *status_ptr);
                     if req_id < 0 {
-                        return Future::from_value(Err(get_client_error(*inner_client.ptr, 0)));
+                        return Future::error(get_client_error(*inner_client.ptr, 0));
                     }
                     ops.insert(req_id, HyperStateOp(err_tx));
                 }
 
                 hyperdex_ds_arena_destroy(arena);
-                Future::from_fn(move|| {
+                helpers::spawn(move|| {
                     let err = err_rx.recv().unwrap();
                     if err.status != HYPERDEX_CLIENT_SUCCESS {
                         Err(err)

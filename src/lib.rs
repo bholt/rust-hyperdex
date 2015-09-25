@@ -1,12 +1,9 @@
 #![feature(concat_idents)]
-#![feature(slicing_syntax)]
 #![feature(box_syntax)]
-#![feature(libc)]
 #![feature(unique)]
-#![feature(std_misc)]
-#![feature(collections)]
 #![feature(ip_addr)]
 #![feature(convert)]
+#![feature(mpsc_select)]
 
 extern crate libc;
 extern crate rustc_serialize;
@@ -17,6 +14,7 @@ pub use client::{Client};
 pub use client_types::{F64, HyperMapAttribute, HyperObject, HyperPredicate, HyperObjectKeyError, HyperPredicateType, HyperValue};
 pub use admin::Admin;
 
+mod helpers;
 mod client;
 mod admin;
 
