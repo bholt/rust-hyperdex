@@ -2,6 +2,15 @@
 
 Rust binding for [HyperDex](http://hyperdex.org/).
 
+> This fork updates the bindings for the latest Rust (nightly build, at least until I can get rid of the use of experimental features). Mainly so far this has involved replacing use of the no-longer-existing `std::sync::Future` with a crate ([`eventual`](https://crates.io/crates/eventual))
+> 
+> Fork todo:
+> - [ ] Check uses of my helper::spawn function, see if they actually need to spawn a thread or if a lazy future or async version will work instead
+> - [ ] Tests
+> - [ ] Remove dependencies on experimental features
+> - [ ] ??? Integrate with capnp?
+
+
 ## Prerequisites
 
 This binding makes use of several experimental features including macros, which are only available on Rust Beta and Rust Nightly.  [Refer to here for installing Rust](http://www.rust-lang.org/install.html).
